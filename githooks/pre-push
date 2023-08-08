@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -euo pipefail
+
+if ! command -v multichecks >/dev/null; then
+  echo "Please install multichecks:"
+  echo ""
+  echo "cargo install --git https://github.com/yshavit/multichecks"
+  exit 1
+fi
+
+multichecks << EOF
+  terraform fmt -check infra
+  cargo fmt --check
+  cargo test
+  cargo check
+EOF
+
+
