@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 async fn handler(event: LambdaEvent<LambdaFunctionUrlRequest>) -> Result<Value, Error> {
+    let path = &event.payload.raw_path;
     let headers = &event.payload.headers;
     let mut headers_map = HashMap::with_capacity(headers.len());
     for (k, v) in headers {
@@ -14,6 +15,7 @@ async fn handler(event: LambdaEvent<LambdaFunctionUrlRequest>) -> Result<Value, 
     Ok(json!({
         "message": format!("Hello, world!"),
         "headers-echo": headers_map,
+        "path": path,
     }))
 }
 
