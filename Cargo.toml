@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 aws_lambda_events = "0.10.0"
 lambda_runtime = "0.8.1"
+rocket = "0.5.0-rc.3"
 serde = "1.0.183"
 serde_json = "1.0.104"
 tokio = { version = "1.29.1", features = ["macros"] }
