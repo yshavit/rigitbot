@@ -1,0 +1,6 @@
+[global.limits]
+bytes = 32768
+forms = 131072
+
+[default.limits]
+bytes = 32768

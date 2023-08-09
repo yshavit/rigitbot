@@ -13,6 +13,7 @@ provider "aws" {
 }
 
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 variable "lambda_short_name" {
   type    = string
@@ -20,10 +21,11 @@ variable "lambda_short_name" {
 }
 
 locals {
+  region           = data.aws_region.current.name
+  aws_account_id   = data.aws_caller_identity.current.account_id
   root_dir         = "${path.module}/.."
   lambda_full_name = "${var.lambda_short_name}-${data.aws_region.current.name}"
-  lambda_bootstrap = "${local.root_dir}/target/lambda/rigitbot/bootstrap"
-  lambda_zip       = "${local.lambda_bootstrap}.zip"
+  lambda_zip = "${local.root_dir}/target/lambda/rigitbot/bootstrap.zip"
 }
 
 
@@ -57,10 +59,14 @@ resource "aws_iam_policy" "lambda_execution_role_policy" {
     Statement = [
       {
         Action = [
+          "logs:CreateLogStream",
           "logs:PutLogEvents",
         ]
-        Effect   = "Allow"
-        Resource = "*"
+        Effect = "Allow"
+        Resource = [
+          "arn:aws:logs:${local.region}:${local.aws_account_id}:log-group:${aws_cloudwatch_log_group.lambda_log_group.name}",
+          "arn:aws:logs:${local.region}:${local.aws_account_id}:log-group:${aws_cloudwatch_log_group.lambda_log_group.name}:*",
+        ],
       },
     ]
   })
@@ -69,27 +75,6 @@ resource "aws_iam_policy" "lambda_execution_role_policy" {
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/${local.lambda_full_name}"
   retention_in_days = 180
-}
-
-resource "null_resource" "build_lambda" {
-  # Thank-you to: https://medium.com/@jakub.jantosik/aws-lambda-and-rust-building-aws-lambda-functions-with-terraform-pt-1-a09e5c0a0cb9
-  triggers = {
-    cargo_file      = filesha256("${local.root_dir}/Cargo.toml")
-    cargo_lock_file = filesha256("${local.root_dir}/Cargo.lock")
-    src_dir         = sha256(join("", [for f in sort(fileset("${local.root_dir}/src", "**")) : filesha256("${local.root_dir}/src/${f}")]))
-  }
-
-  provisioner "local-exec" {
-    command     = "cargo lambda build --release --arm64"
-    working_dir = "${path.module}/.."
-  }
-}
-
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = local.lambda_bootstrap
-  output_path = local.lambda_zip
-  depends_on  = [null_resource.build_lambda]
 }
 
 resource "aws_lambda_function" "lambda" {
@@ -101,7 +86,7 @@ resource "aws_lambda_function" "lambda" {
   role          = aws_iam_role.lambda_execution_role.arn
   handler       = "bootstrap"
 
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  source_code_hash = filebase64sha256(local.lambda_zip)
 
   runtime = "provided.al2"
 }
