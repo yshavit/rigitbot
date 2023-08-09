@@ -26,7 +26,6 @@ async fn handler(
     let Some(path) = &event.payload.raw_path else {
         return Err("couldn't determine path".into());
     };
-    println!("found a method: {method:?}");
     let builder = match method {
         Method::Get => Client::get,
         Method::Put => Client::put,
@@ -48,10 +47,9 @@ async fn handler(
         local_handler.add_header(h);
     }
     local_handler.set_body(event.payload.body.unwrap());
-    println!("dispatching");
     let result = local_handler.dispatch().await;
     let status_code = *(&result.status().code);
-    let body = result.into_string().await.unwrap();
+    let body = result.into_string().await.unwrap_or_default();
 
     return Ok(Response{
         status_code,
@@ -61,8 +59,6 @@ async fn handler(
 
 #[post("/github/event", data = "<body>")]
 fn gh_event(event: GhEventType<'_>, body: Vec<u8>) {
-    let event_str = String::from_utf8(body.clone()).unwrap_or("<err>".to_string());
-    println!("found event: {event_str}");
     let event = WebhookEvent::try_from_header_and_body(event.header_value, &body).unwrap();
     match event.specific {
         WebhookEventPayload::Ping(p) => {
@@ -108,10 +104,6 @@ async fn main() -> Result<(), Error> {
         .init();
 
     let rocket = rocket::build().mount("/", routes![gh_event, hello]);
-    let limits = rocket.figment().find_value("limits");
-
-    println!("found limits: {limits:?}");
-
     let client = Client::untracked(rocket).await?;
     let client_ref = &client;
     lambda_runtime::run(service_fn(move |event| {
